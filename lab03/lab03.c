@@ -108,7 +108,7 @@ int bin_para_dec_endian_invertido(char str[33]){
 void imprime_dec(int valor){
     char buffer[12]; // maior número decimal é -2147483648
     char *ptr = buffer + 11; // ponteiro no LSB do número
-    *ptr = '\n';
+    *ptr = '\0';
     ptr--;
     // o ponteiro é usado para indicar qual a primeira posição válida do número na string
 
@@ -129,7 +129,84 @@ void imprime_dec(int valor){
 
     ptr++;
 
-    write(1, ptr, buffer + 12 - ptr);
+    write(STDOUT_FD, ptr, buffer + 12 - ptr);
+}
+
+// Função para transformar a string do número binário numa string de número hexadecimal
+char* bin_para_hex(char str[33]){
+    char *hex = (char*) malloc(11 * sizeof(char)); // tamanho máximo do número é 8 bits, mais "0x" e '\0'
+    hex[0] = '0';
+    hex[1] = 'x';
+    hex[10] = '\0';
+
+    int negativo = (str[0] == '1'); // bit de sinal
+    char hex_chars[] = "0123456789abcdef";
+    char str_processado[33]; // se for negativo, precisa processar primeiro
+
+    if (negativo){
+        int carry = 1;
+
+        for (int i = 31; i >= 0; i--){
+            if (str[i] == '1')
+                str_processado[i] = (carry) ? '0' : '1';
+            else{
+                str_processado[i] = (carry) ? '1' : '0';
+                carry = 0;
+            }
+        }
+        str_processado[32] = '\0';
+    }    
+    else
+        for (int i = 0; i < 33; i++)
+            str_processado[i] = str[i];
+
+    for (int i = 0; i < 8; i++){
+        int valor = 0;
+        for (int j = 0; j < 4; j++)
+            valor = (valor << 1) | (str_processado[i * 4 + j] - '0');
+        
+        hex[i + 2] = hex_chars[valor];
+    }
+
+    return hex;
+}
+
+// Função para transformar a string do número binário numa string de número octal
+char* bin_para_oct(char str[33]){
+    char *oct = (char*) malloc(15 * sizeof(char)); // "0o" + 11 dígitos + '\0'
+    oct[0] = '0';
+    oct[1] = 'o';
+    oct[14] = '\0';
+
+    int negativo = (str[0] == '1');
+    char str_processado[33];
+
+    if (negativo){
+        int carry = 1;
+        for (int i = 31; i >= 0; i--){
+            if (str[i] == '1')
+                str_processado[i] = (carry) ? '0' : '1';
+            else{
+                str_processado[i] = (carry) ? '1' : '0';
+                carry = 0;
+            }
+        }
+        str_processado[32] = '\0';
+    }    
+    else
+        for (int i = 0; i < 33; i++)
+            str_processado[i] = str[i];
+    
+
+    for (int i = 0; i < 11; i++){
+        int valor = 0;
+        for (int j = 0; j < 3; j++)
+            valor = (valor << 1) | (str_processado[i * 3 + j] - '0');
+
+        oct[i + 2] = '0' + valor;
+    }
+
+    return oct;
 }
 
 int main(){
@@ -142,6 +219,13 @@ int main(){
     int dec_endian = bin_para_dec_endian_invertido(str);
     imprime_dec(dec_endian);
 
-    write(STDOUT_FD, str, n);
+    char *hex = bin_para_hex(str);
+    write(STDOUT_FD, hex, 11);
+    free(hex);
+
+    char *oct = bin_para_oct(str);
+    write(STDOUT_FD, oct, 15);
+    free(oct);
+
     return 0;
 }
