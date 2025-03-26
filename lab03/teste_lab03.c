@@ -1,56 +1,5 @@
-/** Problemas:
- *  tirar malloc
- *  decimal unsigned e little-endian
- *  octal
- *  binário com 0b
- *  decimal signed e litte-endian
- *  octal little-endian
- */
-
-int read(int __fd, const void *__buf, int __n){
-        int ret_val;
-    __asm__ __volatile__(
-        "mv a0, %1           # file descriptor\n"
-        "mv a1, %2           # buffer \n"
-        "mv a2, %3           # size \n"
-        "li a7, 63           # syscall write code (63) \n"
-        "ecall               # invoke syscall \n"
-        "mv %0, a0           # move return value to ret_val\n"
-        : "=r"(ret_val)  // Output list
-        : "r"(__fd), "r"(__buf), "r"(__n)    // Input list
-        : "a0", "a1", "a2", "a7"
-    );
-    return ret_val;
-}
-
-void write(int __fd, const void *__buf, int __n){
-    __asm__ __volatile__(
-        "mv a0, %0           # file descriptor\n"
-        "mv a1, %1           # buffer \n"
-        "mv a2, %2           # size \n"
-        "li a7, 64           # syscall write (64) \n"
-        "ecall"
-        :   // Output list
-        :"r"(__fd), "r"(__buf), "r"(__n)    // Input list
-        : "a0", "a1", "a2", "a7"
-    );
-}
-
-void exit(int code){
-    __asm__ __volatile__(
-        "mv a0, %0           # return code\n"
-        "li a7, 93           # syscall exit (64) \n"
-        "ecall"
-        :   // Output list
-        :"r"(code)    // Input list
-        : "a0", "a7"
-    );
-}
-
-void _start(){
-    int ret_code = main();
-    exit(ret_code);
-}
+#include <stdio.h>
+#include <stdlib.h>
 
 #define STDIN_FD  0
 #define STDOUT_FD 1
@@ -125,32 +74,32 @@ int bin_para_dec_endian_invertido(char str[33]){
 }
 
 // Função para imprimir um número decimal
-void imprime_dec(int valor){
-    char buffer[12]; // maior número decimal é -2147483648
-    char *ptr = buffer + 11; // ponteiro no LSB do número
-    *ptr = '\0';
-    ptr--;
-    // o ponteiro é usado para indicar qual a primeira posição válida do número na string
+// void imprime_dec(int valor){
+//     char buffer[12]; // maior número decimal é -2147483648
+//     char *ptr = buffer + 11; // ponteiro no LSB do número
+//     *ptr = '\0';
+//     ptr--;
+//     // o ponteiro é usado para indicar qual a primeira posição válida do número na string
 
-    int negativo = (valor < 0);
-    if (negativo)
-        valor = -valor;
+//     int negativo = (valor < 0);
+//     if (negativo)
+//         valor = -valor;
 
-    do {
-        *ptr = valor % 10 + '0';
-        valor /= 10;
-        ptr--;
-    } while (valor > 0);
+//     do {
+//         *ptr = valor % 10 + '0';
+//         valor /= 10;
+//         ptr--;
+//     } while (valor > 0);
 
-    if (negativo){
-        *ptr = '-'; // coloca o sinal de menos no MSB
-        ptr--;
-    }
+//     if (negativo){
+//         *ptr = '-'; // coloca o sinal de menos no MSB
+//         ptr--;
+//     }
 
-    ptr++;
+//     ptr++;
 
-    write(STDOUT_FD, ptr, buffer + 12 - ptr);
-}
+//     write(STDOUT_FD, ptr, buffer + 12 - ptr);
+// }
 
 // Função para transformar a string do número binário numa string de número hexadecimal
 char* bin_para_hex(char str[33]){
@@ -240,7 +189,7 @@ void imprime_invertido(char str[33]){
     for (int i = 0; i < 33; i++)
         invertido_completo[i + 2] = invertido[i];
 
-    write(STDOUT_FD, invertido_completo, 35);
+    printf("%s\n", invertido_completo);
 }
 
 int bin_para_dec_invertido_comp_dois(char str[33]){
@@ -269,32 +218,34 @@ char* oct_endian_invertido(char str[33]){
 
 int main(){
     char str[33];
-    int n = read(STDIN_FD, str, 33);
+    scanf(" %s", str);
     
     int dec = bin_para_dec(str);
-    imprime_dec(dec);
+    printf("%d\n", dec);
 
     int dec_endian = bin_para_dec_endian_invertido(str);
-    imprime_dec(dec_endian);
+    printf("%d\n", dec_endian);
 
     char *hex = bin_para_hex(str);
-    write(STDOUT_FD, hex, 11);
+    printf("%s\n", hex);
     free(hex);
 
     char *oct = bin_para_oct(str);
-    write(STDOUT_FD, oct, 15);
+    printf("%s\n", oct);
     free(oct);
 
     imprime_invertido(str);
 
     int dec_endian_comp_dois = bin_para_dec_invertido_comp_dois(str);
-    imprime_dec(dec_endian_comp_dois);
+    printf("%d\n", dec_endian_comp_dois);
 
     char *hex_invertido = hex_endian_invertido(str);
-    write(STDOUT_FD, hex_invertido, 11);
+    printf("%s\n", hex_invertido);
+    free(hex_invertido);
 
     char *oct_invertido = oct_endian_invertido(str);
-    write(STDOUT_FD, oct_invertido, 15);
+    printf("%s\n", oct_invertido);
+    free(oct_invertido);
 
     return 0;
 }
