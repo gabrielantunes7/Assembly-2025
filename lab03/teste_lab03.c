@@ -1,8 +1,12 @@
 #include <stdio.h>
-#include <stdlib.h>
 
 #define STDIN_FD  0
 #define STDOUT_FD 1
+
+void print_string(char str[], int n){
+    for (int i = 0; i < n; i++)
+        printf("%c", str[i]);
+}
 
 // Função para transformar o número binário de 32 bits (complemento de dois) em decimal sem assinatura
 long int bin_para_dec_unsigned(char str[33]){
@@ -47,13 +51,16 @@ void inverte_endian_bin(char str[33], char invertido[33]){
         invertido[i + 24] = str[i];
     }
 
-    invertido[32] = '\n';
+    invertido[32] = '\0';
 }
 
 // Função para transformar o número binário de 32 bits (unsigned e little-endian) em decimal
 long int bin_para_dec_endian_invertido(char str[33]){
     long int decimal = 0;
     char invertido[33];
+    for (int i = 0; i < 33; i++)
+        invertido[i] = '\0';
+        
     inverte_endian_bin(str, invertido);
 
     decimal = bin_para_dec_unsigned(invertido);
@@ -63,8 +70,8 @@ long int bin_para_dec_endian_invertido(char str[33]){
 
 // Função para imprimir um número decimal
 void imprime_dec(long int valor){
-    char decimal[12]; // maior número decimal é -2147483648
-    char aux[12]; // guarda o valor do decimal ao contrário
+    char decimal[13] = {0}; // maior número decimal é -2147483648 + '\n'
+    char aux[12] = {0}; // guarda o valor do decimal ao contrário
     
     int i = 0;
 
@@ -92,21 +99,22 @@ void imprime_dec(long int valor){
         
 
     decimal[i] = '\n';
+    decimal[i + 1] = '\0';
 
-    printf("%s", decimal);
+    print_string(decimal, i + 1);
 }
 
 // Função para transformar a string do número binário numa string de número hexadecimal
 // Retorna o tamanho da string
-// hex tem 11 bits, porque o tamanho máximo do número é 8 bits, mais "0x" e '\0'
-int bin_para_hex(char str[33], char hex[11]){
+// hex tem 12 bits, porque o tamanho máximo do número é 8 bits, mais "0x" e '\0'
+int bin_para_hex(char str[33], char hex[12]){
     hex[0] = '0';
     hex[1] = 'x';
 
     long int decimal = bin_para_dec_unsigned(str);
 
     // guarda o valor do número em hexa ao contrário
-    char aux[9];
+    char aux[9] = {0};
     int i = 0;
     if (decimal == 0)
         hex[i + 2] = '0';
@@ -128,20 +136,21 @@ int bin_para_hex(char str[33], char hex[11]){
     }
 
     hex[i + 2] = '\n';
+    hex[i + 3] = '\0';
 
-    return i + 1;
+    return i + 3;
 }
 
 // Função para transformar a string do número binário numa string de número octal
 // Retorna o tamanho da string
-// oct tem 15 bits, "0o" + 11 dígitos + '\0'
-int bin_para_oct(char str[33], char oct[15]){
+// oct tem 16 bits, "0o" + 11 dígitos + '\n + '\0'
+int bin_para_oct(char str[33], char oct[16]){
     oct[0] = '0';
     oct[1] = 'o';
 
     long int decimal = bin_para_dec_unsigned(str);
 
-    char aux[13];
+    char aux[13] = {0};
     int i = 0;
     if (decimal == 0)
         oct[i + 2] = '0';
@@ -159,44 +168,47 @@ int bin_para_oct(char str[33], char oct[15]){
     }
 
     oct[i + 2] = '\n';
+    oct[i + 3] = '\0';
 
-    return i + 1;
+    return i + 3;
 }
 
 void imprime_invertido(char str[33]){
-    char invertido[33];
+    char invertido[33] = {0};
     inverte_endian_bin(str, invertido);
 
     if (str[0] != '1'){
-        char invertido_completo[34]; // binário invertido com "0b" na frente sem o bit de sinal
+        char invertido_completo[35] = {0}; // binário invertido com "0b" na frente sem o bit de sinal
         invertido_completo[0] = '0';
         invertido_completo[1] = 'b';
         invertido_completo[33] = '\n';
+        invertido_completo[34] = '\0';
 
         // como um strcpy()
         for (int i = 1; i < 33; i++)
             invertido_completo[i + 1] = invertido[i];
         
-        printf("%s", invertido_completo);
+        print_string(invertido_completo, 34);
     }
     // se for negativo, precisa incluir todos os bits
     else{
-        char invertido_completo[35]; // binário invertido com "0b" na frente com o bit de sinal
+        char invertido_completo[36] = {0}; // binário invertido com "0b" na frente com o bit de sinal
         invertido_completo[0] = '0';
         invertido_completo[1] = 'b';
         invertido_completo[34] = '\n';
+        invertido_completo[35] = '\0';
 
         // como um strcpy()
-        for (int i = 1; i < 33; i++)
+        for (int i = 0; i < 32; i++)
             invertido_completo[i + 2] = invertido[i];
         
-        printf("%s", invertido_completo);
+        print_string(invertido_completo, 35);
     }
 }
 
 // Função para transformar o binário (comp. de dois e little-endian) em decimal
 long int bin_para_dec_invertido_comp_dois(char str[33]){
-    char invertido[33];
+    char invertido[33] = {0};
     inverte_endian_bin(str, invertido);
     long int decimal = bin_para_dec(invertido);
 
@@ -206,7 +218,7 @@ long int bin_para_dec_invertido_comp_dois(char str[33]){
 // Função para tranformar o binário little-endian em hexadecimal
 // Retorna o tamanho da string
 int hex_endian_invertido(char str[33], char hex[11]){
-    char invertido[33];
+    char invertido[33] = {0};
     inverte_endian_bin(str, invertido);
 
     return bin_para_hex(invertido, hex);
@@ -215,15 +227,15 @@ int hex_endian_invertido(char str[33], char hex[11]){
 // Função para tranformar o binário little-endian em octal
 // Retorna o tamanho da string
 int oct_endian_invertido(char str[33], char oct[15]){
-    char invertido[33];
+    char invertido[33] = {0};
     inverte_endian_bin(str, invertido);
 
     return bin_para_oct(invertido, oct);
 }
 
 int main(){
-    char str[33];
-    scanf(" %s", str);
+    char str[33] = {0};
+    scanf("%33s", str);
     
     long int dec = bin_para_dec(str);
     imprime_dec(dec);
@@ -231,26 +243,26 @@ int main(){
     long int dec_endian = bin_para_dec_endian_invertido(str);
     imprime_dec(dec_endian);
 
-    char hex[11];
-    bin_para_hex(str, hex);
-    printf("%s\n", hex);
+    char hex[12] = {0};
+    int tam_hex = bin_para_hex(str, hex);
+    print_string(hex, tam_hex);
 
-    char oct[15];
-    bin_para_oct(str, oct);
-    printf("%s\n", oct);
+    char oct[16] = {0};
+    int tam_oct = bin_para_oct(str, oct);
+    print_string(oct, tam_oct);
 
     imprime_invertido(str);
 
     int dec_endian_comp_dois = bin_para_dec_invertido_comp_dois(str);
     imprime_dec(dec_endian_comp_dois);
 
-    char hex_invertido[11]; 
-    hex_endian_invertido(str, hex_invertido);
-    printf("%s\n", hex_invertido);
+    char hex_invertido[12] = {0}; 
+    int tam_hex_invertido = hex_endian_invertido(str, hex_invertido);
+    print_string(hex_invertido, tam_hex_invertido);
 
-    char oct_invertido[15];
-    oct_endian_invertido(str, oct_invertido);
-    printf("%s\n", oct_invertido);
+    char oct_invertido[16] = {0};
+    int tam_oct_invertido = oct_endian_invertido(str, oct_invertido);
+    print_string(oct_invertido, tam_oct_invertido);
 
     return 0;
 }
