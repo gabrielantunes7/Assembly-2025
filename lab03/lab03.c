@@ -271,14 +271,13 @@ void imprime_invertido(char str[33]){
 
     inverte_endian_bin(str, invertido);
 
-    if (str[0] != '1'){
-        char invertido_sem_sinal[32]; // tira o bit de sinal
-        inicializa_com_zero(invertido_sem_sinal, 32);
-        for (int i = 0; i < 32; i++)
-            invertido_sem_sinal[i] = invertido[i + 1];
-
+    if (invertido[0] != '1'){
+        int i = 0;
+        while (invertido[i] != '1')
+            i++;
+        
         write(STDOUT_FD, "0b", 2);
-        write(STDOUT_FD, invertido_sem_sinal, 31);
+        write(STDOUT_FD, invertido + i, 31);
         write(STDOUT_FD, "\n", 1);
     }
     // se for negativo, precisa incluir todos os bits
