@@ -1,58 +1,37 @@
+.data 
+buffer: .space 1      # read function uses it
+result: .space 1      # write function uses it
+
+.text
+
 .globl _start
 
 _start:
     jal main
     li a0, 0
-    li a7, 93 # exit
+    li a7, 93           # exit
     ecall
 
 main:
-    jal read             # call read function for the first triangle
-    la a0, input_address # a0 points to input start
+    jal read_number
+    mv s0, a0           # s0 = CA1
 
-    jal atoi             # convert string to integer
-    mv s0, a1            # s0 = CA1
+    jal read_number
+    mv s1, a0           # s1 = CO1
 
-    jal skip_non_digits  # skip non-digit characters
-    jal atoi             # convert string to integer
-    mv s1, a1            # s1 = CO1
+    jal read_number
+    mv s2, a0           # s2 = CO2
 
-    jal skip_non_digits  # skip non-digit characters
-    jal atoi             # convert string to integer
-    mv s2, a1            # s2 = CO2
+    mul t1, s0, s2      # t1 = CA1 * CO2
+    divu s3, t1, s1     # s3 = (CA1 * CO2) / CO1 = CA2
 
-    # CA2 = (CA1 * CO2) / CO1
-    mul t1, s0, s2       # t1 = CA1 * CO2
-    divu s3, t1, s1      # s3 = (CA1 * CO2) / CO1 = CA2
-
-    # convert the result (s3) to string
-    mv a0, s3            # move result to a0
-    la a1, result        # a1 points to result buffer
-    jal ra, itoa         # convert integer to string
+    mv a0, s3           # a0 = CA2
+    jal itoa
 
     jal write
-    ret
 
-# atoi: Converts a string to an integer
-# Input: a0 = address of string
-# Output: a1 = integer value
-atoi:
-    li a1, 0             # initialize result to 0
-
-atoi_loop:
-    lbu t0, 0(a0)        # load byte from string
-    beqz t0, atoi_done   # if null terminator, done
-    li t2, 48            # ASCII '0'
-    sub t0, t0, t2       # convert ASCII to integer
-    li t6, 10
-    mul a1, a1, t6       # result = result * 10
-    add a1, a1, t0       # result += digit
-    addi a0, a0, 1       # move to next character
-    j atoi_loop
-
-atoi_done:
-    ret
-
+    jr ra
+    
 # itoa: Converts an integer to a string
 # Input: a0 = integer value, a1 = address of buffer
 # Output: a1 = string ended in '\n'
@@ -94,37 +73,67 @@ itoa_end:
     addi sp, sp, 16      # deallocate stack space
     ret
 
-# skip_non_digits: Skip non-digit characters in the input string
-skip_non_digits:
-    lbu t2, 0(a0)        # load byte from string
-    li t3, 48            # ASCII '0'
-    li t4, 57            # ASCII '9'
-    blt t2, t3, skip_advance # if less than '0', advance
-    bgt t2, t4, skip_advance # if greater than '9', advance
-    ret
-
-skip_advance:
-    addi a0, a0, 1       # move to next character
-    j skip_non_digits
-
 read:
     li a0, 0             # file descriptor = 0 (stdin)
-    la a1, input_address # buffer
-    li a2, 24            # size - Reads 24 bytes.
+    la a1, buffer        # buffer
+    li a2, 1             # size - reads 1 byte.
     li a7, 63            # syscall read (63)
     ecall
     ret
 
+# Reads an entire integer number (1 or 2 digits)
+read_number:
+    mv s4, ra
+    li t0, 0             # final number (accumulator)
+    li t1, 10            # base 10
+
+read_loop:
+    jal read
+    lb t2, 0(a1)
+
+    li t3, 48            # ASCII '0'
+    li t4, 57            # ASCII '9'
+
+    # if t2 < '0' or t2 > '9', finish reading
+    blt t2, t3, read_done
+    bgt t2, t4, read_done
+
+    sub t2, t2, t3       # converts character to integer
+
+    mul t0, t0, t1       # number = number * 10
+    add t0, t0, t2       # number = number + new digit (t2)
+
+    j read_loop
+
+read_done:
+    mv a0, t0            # returns in a0
+    mv ra, s4
+    ret
+
 write:
-    li a0, 1            # file descriptor = 1 (stdout)
-    la a1, result       # buffer
-    li a2, 4            # size - Writes 4 bytes.
-    li a7, 64           # syscall write (64)
+    li a0, 1             # file descriptor = 1 (stdout)
+    la a1, result        # buffer
+    li a2, 1             # size - writes 1 byte.
+    li a7, 64            # syscall write (64)
     ecall
     ret
 
-.bss
+write_result:
+    mv t0, a0
+    la t3, result        # t0 = result address
 
-input_address: .skip 0x18  # buffer
+write_loop:
+    lb t1, 0(t0)         # digit from result buffer
+    li t2, 10            # ASCII '\n'
+    sb t1, 0(t3)
 
-result: .skip 0x4
+    jal write
+
+    beq t1, t2, write_done # if t1 == '\n', finish writing
+
+    addi t0, t0, 1       # next character
+
+    j write_loop
+
+write_done:
+    ret
