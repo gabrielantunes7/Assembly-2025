@@ -1,3 +1,12 @@
+.data
+buffer: .space 6 # maximum 5 digits + '\n'
+side1: .space 3 # maximum 2 digits + '\0'
+side2: .space 3 # maximum 2 digits + '\0'
+side3: .space 3 # maximum 2 digits + '\0'
+result: .space 5 # maximum 3 digits + '\n' + '\0'
+
+.text
+
 .globl _start
 
 _start:
@@ -7,17 +16,88 @@ _start:
     ecall
 
 main:
-    jal read             # call read function for the first triangle
-    la a0, input_address # a0 points to input start
+    # buffer is going to be "side1 side2\n", side1 and side2 can be 1 or 2 bytes (digits)
+    la a0, buffer        # a0 points to input start
+    li a1, 6             # a1 = maximum size of buffer
+    jal ra, read_line    # call read function for the first triangle
+    la t0, buffer        # t0 points to buffer start
+
+    la t1, side1         # t1 points to side1
+    lb t2, 0(t0)         # side1[0] = buffer[0]
+    sb t2, 0(t1)         # store side1[0]
+    addi t0, t0, 1       # moves to next position (buffer[1])
+    addi t1, t1, 1       # moves to next position (side1[1])
+    lb t3, 0(t0)         # t3 = buffer[1]
+    li t5, 32            # ASCII ' '
+    bne t2, t5, else     # if buffer[1] == ' '
+    j cont
+
+else:
+    sb t3, 0(t1)         # store side1[1]
+    addi t0, t0, 1       
+    addi t1, t1, 1
+
+cont:
+    addi t0, t0, 1       # moves to next position (buffer)
+    addi t1, t1, 1       # moves to next position (side1)
+    li t3, 0             # t3 = '\0'
+    sb t3, 0(t1)         # store '\0' in side1
+    mv a0, t1            # a0 points to side1 start
 
     jal atoi             # convert string to integer
     mv s0, a1            # s0 = CA1
 
-    jal skip_non_digits  # skip non-digit characters
+    addi t0, t0, 1       # moves to first position of next number
+    la t1, side2         # t1 points to side2
+    lb t2, 0(t0)         # side2[0] = buffer[3]
+    sb t2, 0(t1)         # store side2[0]
+    addi t0, t0, 1       # moves to next position (buffer)
+    addi t1, t1, 1       # moves to next position (side2[1])
+    lb t3, 0(t0)         # t3 = buffer[4]
+    bne t2, t5, else2    # if buffer[4] == ' '
+    j cont2
+
+else2:
+    sb t3, 0(t1)         # store side2[1]
+    addi t0, t0, 1       # moves to next position (buffer)
+    addi t1, t1, 1       # moves to next position (side2[2])
+
+cont2:
+    addi t0, t0, 1       # moves to next position (buffer)
+    addi t1, t1, 1       # moves to next position (side2)
+    li t3, 0             # t3 = '\0'
+    sb t3, 0(t1)         # store '\0' in side2
+    mv a0, t1            # a0 points to side2 start
+
     jal atoi             # convert string to integer
     mv s1, a1            # s1 = CO1
 
-    jal skip_non_digits  # skip non-digit characters
+    la a0, buffer        # a0 points to buffer start
+    li a1, 6             # a1 = maximum size of buffer
+    jal ra, read_line    # call read function for the second triangle
+    la t0, buffer        # t0 points to buffer start
+
+    la t1, side3         # t1 points to side3
+    lb t2, 0(t0)         # side3[0] = buffer[0]
+    sb t2, 0(t1)         # store side3[0]
+    addi t0, t0, 1       # moves to next position (buffer[1])
+    addi t1, t1, 1       # moves to next position (side3[1])
+    lb t3, 0(t0)         # t3 = buffer[1]
+    bne t2, t5, else3    # if buffer[1] == ' '
+    j cont3
+
+else3:
+    sb t3, 0(t1)         # store side3[1]
+    addi t0, t0, 1       # moves to next position (buffer)
+    addi t1, t1, 1       # moves to next position (side3[2])
+
+cont3:
+    addi t0, t0, 1       # moves to next position (buffer)
+    addi t1, t1, 1       # moves to next position (side3)
+    li t3, 0             # t3 = '\0'
+    sb t3, 0(t1)         # store '\0' in side3
+    mv a0, t1            # a0 points to side3 start
+
     jal atoi             # convert string to integer
     mv s2, a1            # s2 = CO2
 
@@ -30,7 +110,7 @@ main:
     la a1, result        # a1 points to result buffer
     jal ra, itoa         # convert integer to string
 
-    jal write
+    jal ra, write_str    # write result to stdout
     ret
 
 # atoi: Converts a string to an integer
@@ -94,37 +174,56 @@ itoa_end:
     addi sp, sp, 16      # deallocate stack space
     ret
 
-# skip_non_digits: Skip non-digit characters in the input string
-skip_non_digits:
-    lbu t2, 0(a0)        # load byte from string
-    li t3, 48            # ASCII '0'
-    li t4, 57            # ASCII '9'
-    blt t2, t3, skip_advance # if less than '0', advance
-    bgt t2, t4, skip_advance # if greater than '9', advance
-    ret
+# read_line: Reads a string (line) from stdin
+# Inputs: a0 = address of buffer, a1 = maximum size of buffer
+# Output: a1 = number of bytes read, saves the line read in buffer
+read_line:
+    mv t0, a0           # t0 = buffer address
+    mv t1, a1           # t1 = bytes remaining
+    li t2, 0            # t2 = bytes read
 
-skip_advance:
-    addi a0, a0, 1       # move to next character
-    j skip_non_digits
+read_loop:
+    beqz t1, read_done  # if no space left, done
 
-read:
-    li a0, 0             # file descriptor = 0 (stdin)
-    la a1, input_address # buffer
-    li a2, 24            # size - Reads 24 bytes.
-    li a7, 63            # syscall read (63)
+    # syscall read: a0 = stdin, a1 = buffer, a2 = 1
+    li a0, 0            # stdin
+    mv a1, t0           # current buffer address
+    li a2, 1            # reads 1 byte
+    li a7, 63
     ecall
+
+    beq a0, zero, read_done  # EOF
+    lb t3, 0(t0)             # byte read
+    addi t2, t2, 1           # total += 1
+    addi t0, t0, 1           # buffer++
+    addi t1, t1, -1          # space remaining--
+
+    li t4, 10                # ASCII '\n'
+    beq t3, t4, read_done    # if '\n', finish
+
+    j read_loop
+
+read_done:
+    mv a1, t2                # returns bytes read
     ret
+
+# write_str: Writes a string to stdout
+# Input: a0 = address of string
+# Output: writes the string to stdout
+write_str:
+    mv t0, a0        # t0 = string[0]
+
+count_loop:
+    lbu t1, 0(t0)    # gets byte from string
+    beqz t1, write   # if byte == 0 ('\0'), end of string
+    addi t0, t0, 1   # next position
+    j count_loop
 
 write:
-    li a0, 1            # file descriptor = 1 (stdout)
-    la a1, result       # buffer
-    li a2, 4            # size - Writes 4 bytes.
-    li a7, 64           # syscall write (64)
+    sub a2, t0, a0   # a2 = string size (t0 - a0)
+    li a1, 1         # file descriptor = 1 (stdout)
+    mv a1, a0        # a1 = buffer (string[0])
+    li a0, 1         # a0 = stdout
+    li a7, 64        # syscall write
     ecall
     ret
-
-.bss
-
-input_address: .skip 0x18  # buffer
-
-result: .skip 0x4
