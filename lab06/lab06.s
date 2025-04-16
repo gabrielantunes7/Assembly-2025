@@ -12,7 +12,7 @@ result: .space 5 # maximum 3 digits + '\n' + '\0'
 _start:
     jal main
     li a0, 0
-    li a7, 93 # exit
+    li a7, 93           # exit
     ecall
 
 main:
@@ -101,14 +101,11 @@ cont3:
     jal atoi             # convert string to integer
     mv s2, a1            # s2 = CO2
 
-    # CA2 = (CA1 * CO2) / CO1
-    mul t1, s0, s2       # t1 = CA1 * CO2
-    divu s3, t1, s1      # s3 = (CA1 * CO2) / CO1 = CA2
+    mul t1, s0, s2      # t1 = CA1 * CO2
+    divu s3, t1, s1     # s3 = (CA1 * CO2) / CO1 = CA2
 
-    # convert the result (s3) to string
-    mv a0, s3            # move result to a0
-    la a1, result        # a1 points to result buffer
-    jal ra, itoa         # convert integer to string
+    mv a0, s3           # a0 = CA2
+    jal itoa
 
     jal ra, write_str    # write result to stdout
     ret
