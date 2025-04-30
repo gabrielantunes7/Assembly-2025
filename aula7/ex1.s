@@ -1,17 +1,17 @@
 # Translate the following C code to assembly RISC-V:
 
-; /* Global array */ 
-; int numbers[10]; 
+/* Global array */ 
+# int numbers[10]; 
 
-; /* Returns the largest value from array numbers. */ 
-; int get_largest_number() { 
-;    int largest = numbers[0]; 
-;    for (int i=1; i<10; i++) { 
-;       if (numbers[i] > largest) 
-;          largest = numbers[i]; 
-;       } 
-;    return largest; 
-; }
+/* Returns the largest value from array numbers. */ 
+#  int get_largest_number() { 
+#    int largest = numbers[0]; 
+#    for (int i=1; i<10; i++) { 
+#       if (numbers[i] > largest) 
+#          largest = numbers[i]; 
+#       } 
+#    return largest; 
+# }
 
 .data
 numbers: .skip 40     # 10 integers (4 bytes each)
