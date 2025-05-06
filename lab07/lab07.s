@@ -9,6 +9,7 @@ exp3: .space 4          # max 3 digits + '\0'
 lower: .space 4         # max 3 digits + '\0'
 upper: .space 4         # max 3 digits + '\0'
 result: .space 32       # max 30 digits + '\n' + '\0' (estimating)
+newline: .byte 10, 0
 
 .text
 .globl _start
@@ -27,27 +28,58 @@ main:
 
     la a0, buffer       # a0 points to input start
     li a1, 6            # a1 = maximum size of buffer
+    jal ra, read_line
     la a2, sgn1         # a2 points to signal buffer
     la a3, exp1         # a3 points to exponent buffer
     jal ra, read_polynomial # read first polynomial
 
+    la a0, sgn1
+    jal ra, write_str
+
+    la a0, exp1
+    jal ra, write_str
+
     la a0, buffer       # a0 points to input start
     li a1, 6            # a1 = maximum size of buffer
+    jal ra, read_line
     la a2, sgn2         # a2 points to signal buffer
     la a3, exp2         # a3 points to exponent buffer
     jal ra, read_polynomial # read second polynomial
 
+    la a0, sgn2
+    jal ra, write_str
+
+    la a0, exp2
+    jal ra, write_str
+
     la a0, buffer       # a0 points to input start
     li a1, 6            # a1 = maximum size of buffer
+    jal ra, read_line
     la a2, sgn3         # a2 points to signal buffer
     la a3, exp3         # a3 points to exponent buffer
     jal ra, read_polynomial # read third polynomial
 
+    la a0, sgn3
+    jal ra, write_str
+
+    la a0, exp3
+    jal ra, write_str
+
     la a0, buffer       # a0 points to input start
     li a1, 6            # a1 = maximum size of buffer
+    jal ra, read_line
     la a2, lower        # a2 points to lower limit buffer
     la a3, upper        # a3 points to upper limit buffer
     jal ra, read_limits # read integration limits
+
+    la a0, lower
+    jal ra, write_str
+
+    la a0, upper
+    jal ra, write_str
+
+    la a0, newline
+    jal ra, write_str
 
     # now: convert exponents to integers and store them in s0, s1, s2
     # also convert integration limits to integers and store them in s4 and s5
@@ -226,27 +258,23 @@ read_done:
 # No output
 # The polynomial is "signal exponent"; example: "- 2" = -x^2
 read_polynomial:
-    addi sp, sp, -4         # allocate stack space for return address
-    sw ra, 0(sp)            # save return address
-    jal ra, read_line       # read line from stdin
-    lbu t0, 0(a0)           # t0 = first character of buffer
+    mv t6, a0               # t6 = buffer address
+    lbu t0, 0(t6)           # t0 = first character of buffer
     sb t0, 0(a2)            # store first character (signal) in signal buffer
-    addi a0, a0, 2          # move to next valid character (buffer[1] = ' ')
     addi a2, a2, 1          # move to next character (signal buffer)
     sb zero, 0(a2)          # null terminate signal string
+    addi t6, t6, 2          # move to next valid character (buffer[1] = ' ')
     li s1, 10               # ASCII '\n'
 read_exponent:
-    lbu t0, 0(a0)           # t0 = first character of the exponent
+    lbu t0, 0(t6)           # t0 = first character of the exponent
     beq t0, s1, read_done_exponent # if '\n', done
     beqz t0, read_done_exponent # if null terminator, done
     sb t0, 0(a3)            # store exponent in exponent buffer
-    addi a0, a0, 1          # move to next character
+    addi t6, t6, 1          # move to next character
     addi a3, a3, 1          # move to next position in exponent buffer
     j read_exponent
 read_done_exponent:
     sb zero, 0(a3)          # null terminate exponent string
-    lw ra, 0(sp)            # load return address
-    addi sp, sp, 4          # deallocate stack space
     ret
 
 # read_limits: Reads the integration limits from stdin
@@ -255,9 +283,6 @@ read_done_exponent:
 # No output
 # The limits are "lower upper"; example: "0 1" = [0, 1]
 read_limits:
-    addi sp, sp, -4         # allocate stack space for return address
-    sw ra, 0(sp)            # save return address
-    jal ra, read_line       # read line from stdin
     lbu t0, 0(a0)           # t0 = first character of buffer
     sb t0, 0(a2)            # store first character (lower limit) in lower limit buffer
     addi a0, a0, 1          # move to next character in buffer
@@ -290,8 +315,6 @@ read_upper_limit:
     j read_upper_limit
 read_done_upper_limit:
     sb zero, 0(a3)          # null terminate upper limit string
-    lw ra, 0(sp)            # load return address
-    addi sp, sp, 4          # deallocate stack space
     ret
 
 # write_str: Writes a string to stdout
