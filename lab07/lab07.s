@@ -1,4 +1,4 @@
-.data
+.bss
 buffer: .space 6        # max 5 characters + '\0'
 sgn1: .space 2          # 1 character + '\0'
 sgn2: .space 2          # 1 character + '\0'
@@ -9,6 +9,8 @@ exp3: .space 4          # max 3 digits + '\0'
 lower: .space 4         # max 3 digits + '\0'
 upper: .space 4         # max 3 digits + '\0'
 result: .space 32       # max 30 digits + '\n' + '\0' (estimating)
+
+.data
 newline: .byte 10, 0
 
 .text
@@ -32,12 +34,10 @@ main:
     la a2, sgn1         # a2 points to signal buffer
     la a3, exp1         # a3 points to exponent buffer
     jal ra, read_polynomial # read first polynomial
-
-    la a0, sgn1
-    jal ra, write_str
-
-    la a0, exp1
-    jal ra, write_str
+    
+    la a0, exp1         # a0 points to first exponent buffer
+    jal ra, atoi        # convert first exponent to integer
+    mv s0, a1           # s0 = first exponent (integer)
 
     la a0, buffer       # a0 points to input start
     li a1, 6            # a1 = maximum size of buffer
@@ -46,11 +46,9 @@ main:
     la a3, exp2         # a3 points to exponent buffer
     jal ra, read_polynomial # read second polynomial
 
-    la a0, sgn2
-    jal ra, write_str
-
-    la a0, exp2
-    jal ra, write_str
+    la a0, exp2         # a0 points to second exponent buffer
+    jal ra, atoi        # convert second exponent to integer
+    mv s1, a1           # s1 = second exponent (integer)
 
     la a0, buffer       # a0 points to input start
     li a1, 6            # a1 = maximum size of buffer
@@ -59,11 +57,9 @@ main:
     la a3, exp3         # a3 points to exponent buffer
     jal ra, read_polynomial # read third polynomial
 
-    la a0, sgn3
-    jal ra, write_str
-
-    la a0, exp3
-    jal ra, write_str
+    la a0, exp3         # a0 points to third exponent buffer
+    jal ra, atoi        # convert third exponent to integer
+    mv s2, a1           # s2 = third exponent (integer)
 
     la a0, buffer       # a0 points to input start
     li a1, 6            # a1 = maximum size of buffer
@@ -72,29 +68,8 @@ main:
     la a3, upper        # a3 points to upper limit buffer
     jal ra, read_limits # read integration limits
 
-    la a0, lower
-    jal ra, write_str
-
-    la a0, upper
-    jal ra, write_str
-
-    la a0, newline
-    jal ra, write_str
-
     # now: convert exponents to integers and store them in s0, s1, s2
     # also convert integration limits to integers and store them in s4 and s5
-
-    la a0, exp1         # a0 points to first exponent buffer
-    jal ra, atoi        # convert first exponent to integer
-    mv s0, a1           # s0 = first exponent (integer)
-
-    la a0, exp2         # a0 points to second exponent buffer
-    jal ra, atoi        # convert second exponent to integer
-    mv s1, a1           # s1 = second exponent (integer)
-
-    la a0, exp3         # a0 points to third exponent buffer
-    jal ra, atoi        # convert third exponent to integer
-    mv s2, a1           # s2 = third exponent (integer)
 
     la a0, lower        # a0 points to lower limit buffer
     jal ra, atoi        # convert lower limit to integer
@@ -167,56 +142,68 @@ main:
 # Output: a1 = integer value
 atoi:
     li a1, 0             # initialize result to 0
+    mv t1, a0            # t1 = string address
 atoi_loop:
-    lbu t0, 0(a0)        # load byte from string
+    lbu t0, 0(t1)        # load byte from string
     beqz t0, atoi_done   # if null terminator, done
     li t2, 48            # ASCII '0'
     sub t0, t0, t2       # convert ASCII to integer
-    li t6, 10
-    mul a1, a1, t6       # result = result * 10
+    li t3, 10
+    mul a1, a1, t3       # result = result * 10
     add a1, a1, t0       # result += digit
-    addi a0, a0, 1       # move to next character
+    addi t1, t1, 1       # move to next character
     j atoi_loop
 atoi_done:
     ret
 
 # itoa: Converts an integer to a string
 # Input: a0 = integer value, a1 = address of buffer
-# Output: a1 = string ended in '\n'
+# No output, the string is stored in the buffer
 itoa:
-    mv t0, a0            # copy integer to t0
-    addi sp, sp, -16     # allocate stack space
-    mv t1, sp            # t1 points to stack (temporary pointer)
-    li t2, 10            # divisor for base 10
+   mv t0, a0            # t0 = integer value
+   mv t1, a1            # t1 = buffer address
+   li t2, 0             # t2 = digit counter
+   addi sp, sp, -64     # allocate space for temporary buffer in stack
+   mv t4, sp            # t4 = temporary buffer address
+   beqz t0, itoa_zero   # if t0 == 0, handle zero case
 itoa_loop:
-    beqz t0, itoa_done_loop
-    remu t3, t0, t2      # remainder (digit)
-    addi t3, t3, 48      # convert to ASCII
-    sb t3, 0(t1)         # store digit in buffer
-    addi t1, t1, 1
-    divu t0, t0, t2      # divide by 10
-    j itoa_loop
-itoa_done_loop:
-    beqz a0, itoa_case_zero
-    addi t1, t1, -1      # adjust pointer to first position in stack
-itoa_copy:
-    lbu t3, 0(t1)    # load byte from stack
-    sb t3, 0(a1)     # store in buffer
-    addi a1, a1, 1   # move to next position in buffer
-    addi t1, t1, -1  # move to next position in stack
-    bgeu t1, sp, itoa_copy # continue until stack pointer (number has ended)
-    j itoa_end
-itoa_case_zero:
-    li t3, 48            # ASCII '0'
-    sb t3, 0(a1)         # store '0' in buffer
-    addi a1, a1, 1       # move to next position in buffer
-itoa_end:
-    li t3, 10            # ASCII '\n'
-    sb t3, 0(a1)         # store '\n' in buffer
-    addi a1, a1, 1       # move to next position in buffer
-    li t3, 0             # ASCII '\0' (null terminator)
-    sb t3, 0(a1)         # store '\0' in buffer
-    addi sp, sp, 16      # deallocate stack space
+    li t5, 10           # divisor
+    rem t3, t0, t5      # t3 = t0 % 10 (last digit)
+    divu t0, t0, t5     # t0 = t0 / 10 (remaining number)
+
+    addi t3, t3, 48     # convert digit to ASCII
+    sb t3, 0(t4)        # store digit in temporary buffer
+    addi t4, t4, 1      # move to next position in temporary buffer
+    addi t2, t2, 1      # increment digit counter
+
+    bnez t0, itoa_loop  # if t0 != 0, continue loop
+itoa_done:
+    mv t4, sp           # t4 = temporary buffer address
+    addi t5, t2, -1     # t5 = digit counter - 1 (last valid position)
+    add t4, t4, t5      # move to last valid position in temporary buffer
+itoa_reverse:
+    lb t3, 0(t4)        # load byte from temporary buffer
+    sb t3, 0(t1)        # store byte in result buffer
+    addi t2, t2, -1     # decrement digit counter
+    addi t4, t4, -1      # move to next byte in temporary buffer
+    addi t1, t1, 1      # move to next byte in result buffer
+    bnez t2, itoa_reverse # if digit counter != 0, continue loop
+
+    li t3, 10           # ASCII '\n'
+    sb t3, 0(t1)        # store '\n' at the end of the string
+    addi t1, t1, 1      # move to next byte in result buffer
+    sb zero, 0(t1)      # null terminate the string
+    addi sp, sp, 64     # deallocate stack space
+    ret
+itoa_zero:
+    li t3, 48           # ASCII '0'
+    sb t3, 0(t1)        # store '0' in result buffer
+    addi t1, t1, 1      # move to next byte in result buffer
+    li t3, 10           # ASCII '\n'
+    sb t3, 0(t1)        # store '\n' at the end of the string
+    addi t1, t1, 1      # move to next byte in result buffer
+    sb zero, 0(t1)      # null terminate the string
+    addi sp, sp, 64     # deallocate stack space
     ret
 
 # read_line: Reads a string (line) from stdin
@@ -341,10 +328,13 @@ write:
 exponentiate:
     li a2, 1            # a2 = result (x^n)
     beqz a1, exp_done   # if n == 0, return 1
-    beqz a0, exp_done   # if x == 0, return 0
+    beqz a0, exp_done_zero  # if x == 0, return 0
 exp_loop:
     mul a2, a2, a0      # result *= x
     addi a1, a1, -1     # n--
     bnez a1, exp_loop   # if n != 0, continue loop
+    j exp_done          # done
+exp_done_zero:
+    li a2, 0            # result = 0 (x^0 = 0)
 exp_done:
     ret
