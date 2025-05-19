@@ -1,6 +1,10 @@
 .data
 input_file: .asciz "image.pgm"
-buffer: .space 56
+buffer: .space 440      # bits assembled as bytes
+msg1: .space 32         # 31 characters + '\0'
+msg2_enc: .space 25     # 24 characters + '\0'
+msg2_dec: .space 25
+header_buf: .space 64   # temporary buffer for header
 
 .text
 .globl _start
@@ -12,18 +16,99 @@ _start:
     ecall
 
 main:
-    addi sp, sp, -4     # allocate space for return address
+    addi sp, sp, -16    # allocate space for return address
     sw ra, 0(sp)        # save return address
 
-    la a0, buffer       # load address of buffer
-    li a1, 55           # number of bytes to read (440 bits)
-    la a2, input_file   # load address of input file
-    jal ra, read_file   # read file (440 bits) into buffer
+    # open input file
+    la a0, input_file   # load address of input file
+    li a1, 2            # flag for read/write
+    li a2, 0            # mode
+    li a7, 1024         # syscall open
+    ecall
+    mv s0, a0           # s0 = file descriptor
 
-    
+    # read header (3 newlines)
+    li t0, 0            # newline counter
+    la t1, header_buf   # t1 = address of buffer for header
+1:
+    mv a0, s0           # file descriptor
+    lw a1, t1           # buffer address
+    li a2, 1            # read 1 byte
+    li a7, 63           # syscall read
+    ecall
+
+    beqz a0, header_done  # if read returns 0 (eof), done
+    lb t2, 0(t1)        # load byte from buffer
+    li t4, 10           # ASCII newline
+    addi t1, t1, 1      # move to next byte in buffer
+    beq t2, t4, inc_newline  # if byte is newline, increment counter
+    j 1b
+inc_newline:
+    addi t0, t0, 1      # increment newline counter
+    li t3, 3
+    beq t0, t3, header_done  # if 3 newlines, done
+    j 1b                # else, continue reading
+header_done:
+    la t2, header_buf   # t2 = address of header buffer
+    sub s1, t1, t2      # s1 = size of header (t1 - header_buf)
+
+    # read first 440 LSB bits into bytes
+    lw a0, s0           # file descriptor
+    la a1, buffer       # buffer address
+    li a2, 440          # read 440 bytes
+    li a7, 63           # syscall read
+    ecall
+
+    # get msg1 (assemble each of the 31 bytes using 8 bits)
+    la t0, buffer       # t0 = address of buffer
+    la t1, msg1         # t1 = address of msg1
+    li t2, 31           # number of chars to process
+1:
+    li t3, 8            # number of bits to process
+    li t4, 0            # initialize msg1 char
+2:
+    lb t5, 0(t0)        # load byte from buffer
+    andi t5, t5, 1      # get LSB
+    slli t4, t4, 1      # shift msg1 char left
+    or t4, t4, t5       # put LSB in msg1 char
+    addi t0, t0, 1      # move to next pixel in buffer
+    addi t3, t3, -1     # decrement bit counter
+    bnez t3, 2b         # if bits left, continue
+    sb t4, 0(t1)        # else, store msg1 char
+    addi t1, t1, 1      # move to next char in msg1
+    addi t2, t2, -1     # decrement char counter
+    bnez t2, 1b         # if chars left, continue
+    sb zero, 0(t1)      # else, null terminate msg1
+
+    # get msg2 (same thing, but 24 bytes)
+    la t1, msg2_enc     # t1 = address of msg2
+    li t2, 24           # number of chars to process
+1:
+    li t3, 8            # number of bits to process
+    li t4, 0            # initialize msg2 char
+2:
+    lb t5, 0(t0)        # load byte from buffer
+    andi t5, t5, 1      # get LSB
+    slli t4, t4, 1      # shift msg2 char left
+    or t4, t4, t5       # put LSB in msg2 char
+    addi t0, t0, 1      # move to next pixel in buffer
+    addi t3, t3, -1     # decrement bit counter
+    bnez t3, 2b         # if bits left, continue
+    sb t4, 0(t1)        # else, store msg2 char
+    addi t1, t1, 1      # move to next char in msg2
+    addi t2, t2, -1     # decrement char counter
+    bnez t2, 1b         # if chars left, continue
+    sb zero, 0(t1)      # else, null terminate msg2
+
+    la a0, msg1         # a0 = address of msg1
+    jal write_str       # write msg1 to stdout
+
+    mv a0, s0           # file descriptor
+    li a7, 57           # syscall close
+    ecall
 
     lw ra, 0(sp)        # load return address
-    addi sp, sp, 4      # deallocate space
+    addi sp, sp, 16     # deallocate space
 
     ret
 
@@ -90,41 +175,6 @@ itoa_zero:
     addi sp, sp, 64     # deallocate stack space
     ret
 
-# read_file: Reads a string from a given file
-# Inputs: a0 = address of buffer, a1 = bytes to read, a2 = address of input file
-# No output, stores the string read in buffer
-read_file:
-    addi sp, sp, -4     # allocate space for return address
-    sw ra, 0(sp)        # save return address
-
-    mv t0, a0            # t0 = buffer address
-    mv t1, a1            # t1 = bytes to read
-
-    # load the file descriptor for input_file in a0
-    mv a0, a2           # load address of input file
-    li a1, 0            # flag for read only
-    li a2, 0            # mode
-    li a7, 1024         # syscall open
-    ecall
-    mv t0, a0           # t0 = file descriptor
-
-    # read from the file
-    mv a0, t0           # a0 = file descriptor
-    mv a1, t0           # a1 = buffer address
-    mv a2, t1           # a2 = bytes to read
-    li a7, 63           # syscall read
-    ecall
-
-    # close the file
-    mv a0, t0          # a0 = file descriptor
-    li a7, 57          # syscall close
-    ecall
-
-    lw ra, 0(sp)        # load return address
-    addi sp, sp, 4      # deallocate space
-
-    ret
-    
 # write_str: Writes a string to stdout
 # Input: a0 = address of string
 # Output: writes the string to stdout
@@ -141,22 +191,4 @@ write:
     li a0, 1         # a0 = file descriptor = stdout (1)
     li a7, 64        # syscall write
     ecall
-    ret
-
-# exponentiate: Calculates the value of x^n
-# Input: a0 = base (x), a1 = exponent (n)
-# Output: a2 = result (x^n)
-exponentiate:
-    li a2, 1            # a2 = result (x^n)
-    beqz a1, exp_done   # if n == 0, return 1
-    beqz a0, exp_done_zero  # if x == 0, return 0
-    beq a0, a2, exp_done  # if x == 1, return 1
-exp_loop:
-    mul a2, a2, a0      # result *= x
-    addi a1, a1, -1     # n--
-    bnez a1, exp_loop   # if n != 0, continue loop
-    j exp_done          # done
-exp_done_zero:
-    li a2, 0            # result = 0 (x^0 = 0)
-exp_done:
     ret
