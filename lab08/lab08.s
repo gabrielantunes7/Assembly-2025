@@ -1,10 +1,12 @@
 .data
 input_file: .asciz "image.pgm"
-buffer: .space 440      # bits assembled as bytes
+buffer: .space 4109     # buffer for reading the file
 msg1: .space 32         # 31 characters + '\0'
+# Message 1 is: "Length is the key. Allan Turing", which means the key for the Caesar cipher is 12
 msg2_enc: .space 25     # 24 characters + '\0'
 msg2_dec: .space 25
 header_buf: .space 64   # temporary buffer for header
+newline: .asciz "\n"
 
 .text
 .globl _start
@@ -27,47 +29,23 @@ main:
     ecall
     mv s0, a0           # s0 = file descriptor
 
-    # read header (3 newlines)
-    li t0, 0            # newline counter
-    la t1, header_buf   # t1 = address of buffer for header
-1:
+    # read the input file
     mv a0, s0           # file descriptor
-    lw a1, t1           # buffer address
-    li a2, 1            # read 1 byte
-    li a7, 63           # syscall read
-    ecall
-
-    beqz a0, header_done  # if read returns 0 (eof), done
-    lb t2, 0(t1)        # load byte from buffer
-    li t4, 10           # ASCII newline
-    addi t1, t1, 1      # move to next byte in buffer
-    beq t2, t4, inc_newline  # if byte is newline, increment counter
-    j 1b
-inc_newline:
-    addi t0, t0, 1      # increment newline counter
-    li t3, 3
-    beq t0, t3, header_done  # if 3 newlines, done
-    j 1b                # else, continue reading
-header_done:
-    la t2, header_buf   # t2 = address of header buffer
-    sub s1, t1, t2      # s1 = size of header (t1 - header_buf)
-
-    # read first 440 LSB bits into bytes
-    lw a0, s0           # file descriptor
     la a1, buffer       # buffer address
-    li a2, 440          # read 440 bytes
+    li a2, 4109         # read 4109 bytes (header, 13 bytes + image, 4096 bytes)
     li a7, 63           # syscall read
     ecall
 
     # get msg1 (assemble each of the 31 bytes using 8 bits)
     la t0, buffer       # t0 = address of buffer
+    addi t0, t0, 13     # skip the header (13 bytes)
     la t1, msg1         # t1 = address of msg1
     li t2, 31           # number of chars to process
 1:
     li t3, 8            # number of bits to process
     li t4, 0            # initialize msg1 char
 2:
-    lb t5, 0(t0)        # load byte from buffer
+    lbu t5, 0(t0)       # load byte from buffer
     andi t5, t5, 1      # get LSB
     slli t4, t4, 1      # shift msg1 char left
     or t4, t4, t5       # put LSB in msg1 char
@@ -87,7 +65,7 @@ header_done:
     li t3, 8            # number of bits to process
     li t4, 0            # initialize msg2 char
 2:
-    lb t5, 0(t0)        # load byte from buffer
+    lbu t5, 0(t0)       # load byte from buffer
     andi t5, t5, 1      # get LSB
     slli t4, t4, 1      # shift msg2 char left
     or t4, t4, t5       # put LSB in msg2 char
@@ -100,8 +78,96 @@ header_done:
     bnez t2, 1b         # if chars left, continue
     sb zero, 0(t1)      # else, null terminate msg2
 
-    la a0, msg1         # a0 = address of msg1
-    jal write_str       # write msg1 to stdout
+    la a0, msg2_enc     # a0 = address of msg2
+    jal write_str       # write msg2 encoded to stdout
+
+    la a0, newline
+    jal write_str
+
+    # decode msg2
+    la t0, msg2_enc     # t0 = address of msg2
+    la t1, msg2_dec     # t1 = address of msg2_dec
+    li s1, 65           # ASCII 'A'
+    li s2, 90           # ASCII 'Z'
+    li s3, 97           # ASCII 'a'
+    li s4, 122          # ASCII 'z'
+    li s5, 12           # key for Caesar cipher
+    li t6, 10           # ASCII '\n'
+1:
+    lbu t2, 0(t0)       # load byte of msg2
+    beqz t2, msg2_done  # if null terminator, done
+    beq t2, t6, msg2_done # if '\n', done
+    bltu t2, s1, not_alpha # if < 'A', not alpha
+    bgtu t2, s4, not_alpha # if > 'z', not alpha
+    bleu t2, s2, upper_case # if <= 'Z', upper case; else, lower case
+lower_case:
+    sub t4, t2, s3      # t4 = t2 - 'a'
+    bltu t4, s5, wrap_lower # wrap around if needed
+    sub t2, t2, s5      # t2 = t2 - key
+    sb t2, 0(t1)        # store decoded char
+    addi t0, t0, 1      # move to next byte in msg2
+    addi t1, t1, 1      # move to next char in msg2_dec
+    j 1b
+wrap_lower:
+    sub t5, s5, t4      # t5 = key - t4
+    addi t5, t5, -1     # adjust for wrap around
+    sub t2, s4, t5      # t2 = 'z' - t5 (decoded char)
+    sb t2, 0(t1)        # store decoded char
+    addi t0, t0, 1      # move to next byte in msg2
+    addi t1, t1, 1      # move to next char in msg2_dec
+    j 1b
+upper_case:
+    sub t4, t2, s1      # t4 = t2 - 'A'
+    bltu t4, s5, wrap_upper # wrap around if needed
+    sub t2, t2, s5      # t2 = t2 - key
+    sb t2, 0(t1)        # store decoded char
+    addi t0, t0, 1      # move to next byte in msg2
+    addi t1, t1, 1      # move to next char in msg2_dec
+    j 1b
+wrap_upper:
+    sub t5, s5, t4      # t5 = key - t4
+    addi t5, t5, -1     # adjust for wrap around
+    sub t2, s2, t5      # t2 = 'Z' - t5 (decoded char)
+    sb t2, 0(t1)        # store decoded char
+    addi t0, t0, 1      # move to next byte in msg2
+    addi t1, t1, 1      # move to next char in msg2_dec
+    j 1b
+not_alpha:
+    sb t2, 0(t1)        # store non-alpha char
+    addi t0, t0, 1      # move to next byte in msg2 (non-alpha char is unchanged)
+    addi t1, t1, 1      # move to next char in msg2_dec
+    j 1b
+msg2_done:
+    sb zero, 0(t1)      # null terminate msg2_dec
+
+# put msg2_dec in the last 192 bytes of buffer
+    la t0, buffer       # t0 = address of buffer
+    addi t0, t0, 3917   # skip to last 192 bytes of buffer (for msg2)
+    la t1, msg2_dec     # t1 = address of msg2_dec
+    li s0, 2            # divisor
+    li s2, 24           # number of chars to process
+1:
+    li s1, 8            # number of bits to process in each char
+    lbu t4, 0(t1)       # load byte of msg2_dec
+2:
+    lbu t3, 0(t0)       # load byte of buffer
+    andi t3, t3, 0xFE   # clear LSB (byte and 0b11111110)
+    remu t5, t4, s0     # get LSB of msg2_dec
+    srli t4, t4, 1      # shift msg2_dec right by 1
+    add t3, t3, t5      # add LSB of msg2_dec to buffer
+    sb t3, 0(t0)        # store modified byte in buffer
+    addi t0, t0, 1      # move to next byte in buffer
+    addi s1, s1, -1     # decrement bit counter
+    bnez s1, 2b         # if bits left, continue
+    addi s2, s2, -1     # decrement char counter
+    bnez s2, 1b         # if chars left, continue
+
+# show the changed image
+    li a0, 0
+    li a1, 0
+    li s0, 64
+show_image:
+    bgtu a0, s0, new_line
 
     mv a0, s0           # file descriptor
     li a7, 57           # syscall close
@@ -112,83 +178,20 @@ header_done:
 
     ret
 
-# atoi: Converts a string to an integer
-# Input: a0 = address of string
-# Output: a1 = integer value
-atoi:
-    li a1, 0             # initialize result to 0
-    mv t1, a0            # t1 = string address
-atoi_loop:
-    lbu t0, 0(t1)        # load byte from string
-    beqz t0, atoi_done   # if null terminator, done
-    li t2, 48            # ASCII '0'
-    sub t0, t0, t2       # convert ASCII to integer
-    li t3, 10
-    mul a1, a1, t3       # result = result * 10
-    add a1, a1, t0       # result += digit
-    addi t1, t1, 1       # move to next character
-    j atoi_loop
-atoi_done:
-    ret
-
-# itoa: Converts an integer to a string
-# Input: a0 = integer value, a1 = address of buffer
-# No output, the string is stored in the buffer
-itoa:
-   mv t0, a0            # t0 = integer value
-   mv t1, a1            # t1 = buffer address
-   li t2, 0             # t2 = digit counter
-   addi sp, sp, -64     # allocate space for temporary buffer in stack
-   mv t4, sp            # t4 = temporary buffer address
-   beqz t0, itoa_zero   # if t0 == 0, handle zero case
-itoa_loop:
-    li t5, 10           # divisor
-    rem t3, t0, t5      # t3 = t0 % 10 (last digit)
-    divu t0, t0, t5     # t0 = t0 / 10 (remaining number)
-
-    addi t3, t3, 48     # convert digit to ASCII
-    sb t3, 0(t4)        # store digit in temporary buffer
-    addi t4, t4, 1      # move to next position in temporary buffer
-    addi t2, t2, 1      # increment digit counter
-
-    bnez t0, itoa_loop  # if t0 != 0, continue loop
-itoa_done:
-    mv t4, sp           # t4 = temporary buffer address
-    addi t5, t2, -1     # t5 = digit counter - 1 (last valid position)
-    add t4, t4, t5      # move to last valid position in temporary buffer
-itoa_reverse:
-    lb t3, 0(t4)        # load byte from temporary buffer
-    sb t3, 0(t1)        # store byte in result buffer
-    addi t2, t2, -1     # decrement digit counter
-    addi t4, t4, -1     # move to next byte in temporary buffer
-    addi t1, t1, 1      # move to next byte in result buffer
-    bnez t2, itoa_reverse # if digit counter != 0, continue loop
-
-    sb zero, 0(t1)      # null terminate the string
-    addi sp, sp, 64     # deallocate stack space
-    ret
-itoa_zero:
-    li t3, 48           # ASCII '0'
-    sb t3, 0(t1)        # store '0' in result buffer
-    addi t1, t1, 1      # move to next byte in result buffer
-    sb zero, 0(t1)      # null terminate the string
-    addi sp, sp, 64     # deallocate stack space
-    ret
-
 # write_str: Writes a string to stdout
 # Input: a0 = address of string
 # Output: writes the string to stdout
 write_str:
-    mv t0, a0        # t0 = string[0]
+    mv t0, a0           # t0 = string[0]
 count_loop:
-    lbu t1, 0(t0)    # gets byte from string
-    beqz t1, write   # if byte == 0 ('\0'), end of string
-    addi t0, t0, 1   # next position
+    lbu t1, 0(t0)       # gets byte from string
+    beqz t1, write      # if byte == 0 ('\0'), end of string
+    addi t0, t0, 1      # next position
     j count_loop
 write:
-    sub a2, t0, a0   # a2 = string size (t0 - a0)
-    mv a1, a0        # a1 = buffer (string[0])
-    li a0, 1         # a0 = file descriptor = stdout (1)
-    li a7, 64        # syscall write
+    sub a2, t0, a0      # a2 = string size (t0 - a0)
+    mv a1, a0           # a1 = buffer (string[0])
+    li a0, 1            # a0 = file descriptor = stdout (1)
+    li a7, 64           # syscall write
     ecall
     ret
