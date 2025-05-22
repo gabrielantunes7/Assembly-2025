@@ -1,2 +1,4 @@
 # MC404_2025
-Repositório de atividades desenvolvidas na matéria de MC404 (Organização Básica de Computadores e Linguagem de Montagem) na Unicamp no primeiro semestre de 2025.
+Repository of activities developed in the subject MC404 (Basic Computer Organization and Assembly Language) at Universidade Estadual de Campinas (Unicamp) in the first semester of 2025.
+
+The subject is taught in RISC-V (RV32IM).
