@@ -52,7 +52,7 @@ atoi_done:
 
 # itoa: Converts an integer to a string
 # Input: a0 = integer value, a1 = address of buffer, a2 = base
-# No output, the string is stored in the buffer
+# Output: a0 = address of buffer
 itoa:
     addi sp, sp, -80    # allocate space for return address and temporary buffer in stack
     sw ra, 0(sp)        # save return address
