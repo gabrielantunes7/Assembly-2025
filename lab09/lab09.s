@@ -25,6 +25,7 @@ atoi:
     lbu t0, 0(t1)       # load first byte
     bne t0, t5, 1f
     addi t1, t1, 1      # skip '+'
+    j atoi_loop
 1:
     bne t0, t6, atoi_loop  # if not '-', continue
     addi t1, t1, 1      # skip '-'
@@ -58,25 +59,33 @@ itoa:
 
     li t6, 1            # t6 = sign flag (1 for positive, -1 for negative)
     mv t0, a0           # t0 = integer value
-    bgt a0, zero, 1f
-    li t6, -1           # set negative flag
+    bgt t0, zero, 1f
+    li t6, -1           # if value is negative, set negative flag
+    mul t0, t0, t6      # also get the absolute value
 1:
     mv t1, a1           # t1 = buffer address
+    mv a0, a1           # a0 = buffer address (for return)
     li t2, 0            # t2 = digit counter
     mv t4, sp           
     addi t4, t4, 4      # t4 = temporary buffer address
     beqz t0, itoa_zero  # if t0 == 0, handle zero case
 itoa_loop:
-    li t5, 10           # divisor
-    rem t3, t0, t5      # t3 = t0 % 10 (last digit)
-    divu t0, t0, t5     # t0 = t0 / 10 (remaining number)
+    rem t3, t0, a2      # t3 = t0 % a2
+    divu t0, t0, a2     # t0 = t0 / a2 (remaining number)
+    li t5, 10
+    blt t3, t5, 1f      # if t3 < 10, convert to ASCII directly
+    addi t3, t3, 87     # convert to ASCII (for base > 10)
+    j 2f
+1:    
     addi t3, t3, 48     # convert digit to ASCII
+2:
     sb t3, 0(t4)        # store digit in temporary buffer
     addi t4, t4, 1      # move to next position in temporary buffer
     addi t2, t2, 1      # increment digit counter
     bnez t0, itoa_loop  # if t0 != 0, continue loop
 itoa_done:
     mv t4, sp           # t4 = temporary buffer address
+    addi t4, t4, 4      # move to start of temporary buffer
     addi t5, t2, -1     # t5 = digit counter - 1 (last valid position)
     add t4, t4, t5      # move to last valid position in temporary buffer
     bgt t6, zero, itoa_reverse  # if positive, skip negation
@@ -122,11 +131,10 @@ read_loop:
     li a7, 63
     ecall
 
-    beq a0, zero, read_done  # EOF
     lbu t3, 0(t0)            # byte read
-    addi t0, t0, 1           # buffer++
     li t4, 10                # ASCII '\n'
     beq t3, t4, read_done    # if '\n', finish
+    addi t0, t0, 1           # buffer++
     j read_loop
 read_done:
     sb zero, 0(t0)      # null terminate the string
@@ -182,6 +190,7 @@ search_loop:
     add t4, t2, t3      # sum = val1 + val2
     beq t4, a1, found   # if sum == value to search for, found
     addi t1, t1, 8      # move to next node address (8 bytes for each node)
+    lw t1, 0(t1)        # load next node address
     beqz t1, not_found  # if end of list, not found
     addi t0, t0, 1      # increment index
     j search_loop       # continue searching
@@ -195,6 +204,9 @@ return:
     addi sp, sp, 16     # deallocate stack space
     ret
 
+# exit: Exits the program
+# No input, no output
+# This function is used to exit the program with return code 0
 exit:
     li a0, 0            # return value
     li a7, 93           # syscall exit
