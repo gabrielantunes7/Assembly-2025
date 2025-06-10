@@ -1,6 +1,9 @@
 .rodata
 newline: .asciz "\n"
 
+.bss
+disk_buffer: .space 2 # buffer for disk number (1 byte for disk number, 1 byte for null terminator)
+
 .text
 .globl atoi
 .globl itoa
@@ -191,29 +194,33 @@ exit:
 fibonacci_recursive:
     addi sp, sp, -16    # allocate stack space
     sw ra, 12(sp)       # save return address
+    sw s1, 8(sp)        # save s1 (used for Fibonacci n - 1)
+    sw s0, 4(sp)        # save s0 (used for Fibonacci n - 2)
 
     li t0, 1
     ble a0, zero, base_case_0   # if n <= 0, return 0
     beq a0, t0, base_case_1     # if n == 1, return 1
 
+    mv s0, a0           # s0 = n (original value)
     addi a0, a0, -1     # a0 = n - 1
-    addi t1, a0, -2     # t1 = n - 2
     jal fibonacci_recursive # recursive call for n - 1
-    mv t3, a0           # t3 = fibonacci(n - 1)
+    mv s1, a0           # t3 = fibonacci(n - 1)
 
-    mv a0, t1
+    addi a0, s0, -2     # a0 = n - 2
     jal fibonacci_recursive # recursive call for n - 2
 
-    add a0, a0, t3      # a0 = fibonacci(n - 1) + fibonacci(n - 2)
+    add a0, a0, s1      # a0 = fibonacci(n - 1) + fibonacci(n - 2)
     j fibonacci_done
 base_case_0:
-    mv a0, zero
+    mv a0, zero         # base case: fibonacci(0) = 0
     j fibonacci_done
 base_case_1:
-    li a0, 1
+    li a0, 1            # base case: fibonacci(1) = 1
     j fibonacci_done
 fibonacci_done:
     lw ra, 12(sp)       # restore return address
+    lw s1, 8(sp)        # restore s1
+    lw s0, 4(sp)        # restore s0
     addi sp, sp, 16     # deallocate stack space
 
     ret
@@ -226,7 +233,7 @@ fatorial_recursive:
     sw ra, 12(sp)       # save return address
 
     li t0, 1
-    beq a0, t0, base_case
+    beq a0, t0, fat_base_case
 
     sw a0, 8(sp)        # save original n
     addi a0, a0, -1     # n = n - 1
@@ -236,7 +243,7 @@ fatorial_recursive:
     mul a0, a0, t1      # a0 = n * fatorial(n - 1)
 
     j fatorial_done
-base_case:
+fat_base_case:
     li a0, 1            # base case: fatorial(1) = 1
     j fatorial_done
 fatorial_done:
@@ -246,13 +253,74 @@ fatorial_done:
     ret
 
 # torre_de_hanoi: Solves the Tower of Hanoi problem recursively
-# Input: a0 = number of disks, a1 = source rod, a2 = auxiliary rod, a3 = target rod, a4 = buffer address
+# Input: a0 = number of disks, a1 = source peg, a2 = auxiliary peg, a3 = target peg, a4 = buffer address
 # No output
 torre_de_hanoi:
-    addi sp, sp, -16    # allocate stack space
-    sw ra, 12(sp)       # save return address
+    addi sp, sp, -32    # allocate stack space
+    sw ra, 28(sp)       # save return address
+    sw a4, 24(sp)       # save buffer address
+    sb a3, 20(sp)       # save target peg
+    sb a2, 16(sp)       # save auxiliary peg
+    sb a1, 12(sp)       # save source peg
+    sw a0, 8(sp)        # save number of disks
 
-    bgt a0, zero, 1f    # if n > 0, proceed
-    # base case n == 0, does nothing
-1:
+    li t0, 1
+    beq a0, t0, hanoi_base_case # if n == 1, move disk directly
+
+    addi a0, a0, -1     # n = n - 1
+    sw a0, 4(sp)        # save n - 1
+    mv t1, a2           # t1 = auxiliary peg
+    mv a2, a3           # a2 = target peg
+    mv a3, t1           # a3 = auxiliary peg
+    lw a4, 24(sp)       # a4 = buffer address
+    jal torre_de_hanoi  # recursive call to move n - 1 disks from source to auxiliary peg, using target as auxiliary
+
+    lw a0, 8(sp)        # restore number of disks
+    la a1, disk_buffer  # a1 = disk buffer address
+    li a2, 10           # a2 = base 10 for conversion
+    jal itoa
+
+    lbu t0, (a0)        # load disk number (converted to char) from buffer
+    lbu t1, 12(sp)      # t1 = source peg
+    lbu t2, 20(sp)      # t2 = target peg
+    lw a0, 24(sp)       # a0 = buffer address
+
+    sb t0, 12(a0)       # store disk number in buffer
+    sb t1, 23(a0)       # store source peg in buffer
+    sb t2, 38(a0)       # store target peg in buffer
+    jal puts            # print the buffer ("Mover disco <disk> da torre <source> para a torre <target>")
+
+    lw a0, 4(sp)        # restore n - 1
+    lbu a1, 16(sp)      # a1 = aux (becomes source)
+    lbu a2, 12(sp)      # a2 = source (becomes auxiliary)
+    lbu a3, 20(sp)      # a3 = target
+    lw a4, 24(sp)       # a4 = buffer address
+    jal torre_de_hanoi  # recursive call to move n - 1 disks from auxiliary to target peg, using source as auxiliary
+
+    j torre_de_hanoi_done   # jump to end
+hanoi_base_case:
+    lw t4, 24(sp)       # load buffer address
     
+    li t0, 49           # ASCII '1'
+    sb t0, 12(t4)       # store '1' in buffer (disk number)
+
+    lbu t1, 12(sp)      # load source peg
+    lbu t3, 20(sp)      # load target peg
+
+    sb t1, 23(t4)       # store source peg in buffer
+    sb t3, 38(t4)       # store target peg in buffer
+
+    mv a0, t4           # a0 = buffer address
+    jal puts            # print the buffer ("Mover disco 1 da torre <source> para a torre <target>")
+
+    j torre_de_hanoi_done
+torre_de_hanoi_done:
+    lw ra, 28(sp)       # restore return address
+    lw a4, 24(sp)       # restore buffer address
+    lb a3, 20(sp)       # restore target peg
+    lb a2, 16(sp)       # restore auxiliary peg
+    lb a1, 12(sp)       # restore source peg
+    lw a0, 8(sp)        # restore number of disks
+    addi sp, sp, 32     # deallocate stack space
+
+    ret
